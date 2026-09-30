@@ -1,0 +1,5 @@
+# Just the guide (app/guide_server.py): the whole app needs requirements.txt instead.
+anthropic>=1.9
+fastapi>=0.115
+uvicorn[standard]>=0.34
+python-dotenv>=1.0
