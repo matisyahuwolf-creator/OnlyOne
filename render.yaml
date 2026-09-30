@@ -3,7 +3,7 @@ services:
   - type: web
     name: only-one
     runtime: python
-    plan: starter            # always on; the free plan sleeps and the first visitor waits about a minute
+    plan: free               # a free demo: it sleeps when idle, and the first visitor waits about a minute (starter = always on, about $7 a month)
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn app.guide_server:app --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips '*'
     healthCheckPath: /health
@@ -16,5 +16,12 @@ services:
         value: claude-haiku-4-5
       - key: GUIDE_PUBLIC
         value: "1"
+      # demo limits, counted in replies: each visitor, and the whole site. Raise them when it's more than a demo.
+      - key: GUIDE_REPLIES_PER_HOUR
+        value: "6"
+      - key: GUIDE_REPLIES_PER_DAY
+        value: "10"
+      - key: GUIDE_SITE_REPLIES_PER_DAY
+        value: "200"
       - key: GUIDE_OWNER_CODE    # opens /guide/stats for you
         generateValue: true
