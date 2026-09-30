@@ -91,6 +91,12 @@ KG_TOOLS = [
     {"name": "open_research_item",
      "description": "Opens one item from search_research by its id: its full content (with Hebrew source quotes and references when it has them) and the ids and titles of linked items, which you can open too.",
      "input_schema": {"type": "object", "properties": {"id": {"type": "string"}}, "required": ["id"]}},
+    {"name": "read_tanya",
+     "description": "Opens the full Hebrew text of any chapter or letter of the Tanya, paragraph by paragraph, e.g. \"Likkutei Amarim 32\", \"Iggeret HaKodesh 22\", \"Shaar HaYichud VehaEmunah 1\", \"Iggeret HaTeshuvah 7\", \"Kuntres Acharon 4\". Use it whenever someone asks about a specific chapter or letter, and quote only from what it returns.",
+     "input_schema": {"type": "object", "properties": {"where": {"type": "string"}, "from": {"type": "integer", "description": "paragraph to start from, for long letters"}}, "required": ["where"]}},
+    {"name": "search_tanya",
+     "description": "Searches the full Hebrew text of the Tanya for words or a phrase (write them in Hebrew, without vowels) and returns up to 8 paragraphs with their references.",
+     "input_schema": {"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]}},
 ]
 KG_NAMES = {t["name"] for t in KG_TOOLS}
 MAX_ROUNDS = 6   # tool rounds in one reply; the last one must answer
