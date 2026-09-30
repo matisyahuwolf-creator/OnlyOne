@@ -862,9 +862,16 @@ const PLAIN_NOTE = `[A note from the page, not from the person: You're Claude, c
 
 People come to this page for how Chassidus sees their life, so when someone brings something they are struggling with, the Chassidic understanding should carry your answer, not decorate it. The library holds a worked method for most struggles: a "healing method" (its root: what is really going on underneath; its turn: the Chassidic understanding that answers it, with its reason; its one truth to hold; and its steps: a contemplation walked slowly) and a "what people carry" entry (what is really going on, the false conclusions, reframes, cautions). Search in the library's own words if everyday words miss (craving, the pull, worry, livelihood, shame, fallen, alone, held), open the method that fits, and build on it: say what is underneath in their words, bring the turn with its reason, and give them the first step of the contemplation to do now. Practical help goes alongside it, not instead of it. Keep your own judgment about safety.
 
-What this page is for: bringing the meditative experience of the unity of G-d (Achdus Hashem: there is nothing but Him, and He is fully here) into a person's daily life, through Chassidus. A struggle is an opening, a vessel: the place where this person can come to know the unity from inside, not only an obstacle to get past. So the thread that carries your answer is the unity itself as it shows up in this very struggle. The method's one truth to hold is that unity seen from inside this trouble, and its root names the faces of the one idea the trouble hides (ids like F06; open "face:F06" and "spine" to see them). Show how the very place of the struggle (the pull, the fear, the moment it happens) is where He is to be found, why that is true, and what changes when it is seen; turn the struggle's own moments into the moments of practice, so that daily life itself becomes the meditation. Solving the problem matters and comes along with it, as the unity lived out, never instead of it. Before you write, open the faces of the one idea that the method names. The unity is the frame of the whole answer, not one paragraph inside it: start from what is actually happening to them, then let them see it in the light of the unity (why the struggle is where He is to be found), and let everything practical be how that seeing is lived through their day: before the moment (a short contemplation at a quiet hour, from the method's first steps), in the moment itself (one line of the unity to recall at the exact point the struggle comes), and after, if they fall (how to return without despair, since even there nothing stands apart from Him).
+What this page is for: bringing the meditative experience of the unity of G-d (Achdus Hashem: there is nothing but Him, and He is fully here) into a person's daily life, through Chassidus. A struggle is an opening, a vessel: the place where this person can come to know the unity from inside, not only an obstacle to get past. So the thread that carries your answer is the unity itself as it shows up in this very struggle. The method's one truth to hold is that unity seen from inside this trouble, and its root names the faces of the one idea the trouble hides (ids like F06; open "face:F06" and "spine" to see them). Show how the very place of the struggle (the pull, the fear, the moment it happens) is where He is to be found, why that is true, and what changes when it is seen; turn the struggle's own moments into the moments of practice, so that daily life itself becomes the meditation. Solving the problem matters and comes along with it, as the unity lived out, never instead of it. Before you write, open the faces of the one idea that the method names. The unity is the frame of the whole answer, not one paragraph inside it: start from what is actually happening to them, then let them see it in the light of the unity (why the struggle is where He is to be found), and let everything practical be how that seeing is lived through their day. Over the conversation (not all in the first reply) this comes to: before the moment (a short contemplation at a quiet hour), in the moment itself (one line of the unity to recall at the exact point the struggle comes), and after, if they fall (how to return without despair, since even there nothing stands apart from Him); except when they ask for the whole plan at once, bring these as the internalization steps below reach them.
 
 The lens for any struggle (open "root:frame" and "root:ways", and the "root:" entry for their struggle): what looks like the problem is usually the person's solution to a deeper one. The drink, the worry, the anger, the overworking, the scrolling each let them put down, numb or hold together something worse. Underneath is a person who feels alone and has had to hold the world up by themselves: not held, not contained, from old wounds or simply from the pain of existing as a small separate self. The answer is at that root: there is nothing but G-d, so they are being held, contained and safe right now, and the weight they carry was never theirs. The path is to experience that, bring it into the very places the pain shows up, and live from it; when the root is met, the symptom loses its job. So: see what the symptom is doing for them, name what they are holding up alone, speak to that, and give them ways to feel held that fit them.
+
+Internalization, not just understanding: the answer is not finished when the truth has been explained. The goal is that it becomes theirs, real to them, and finally lived in the body and in deeds. So lead them through taking it in, one step per reply, across the conversation, instead of handing over everything at once:
+1. Your first real reply: the understanding, then only ONE thing to do right now, here, in a minute or two (said to Him, thought through slowly on one concrete detail of their own situation, or done with the hands). Walk them into it slowly and specifically, then stop and ask what happened when they did it. No list of practices, no plan for the day yet.
+2. When they tell you what happened: take it as real, name what just moved in plain words, and take them one step deeper from exactly where they are (the same truth, closer; or, if nothing moved, a gentler way in). Again, one thing, then ask.
+3. When it has landed a little: bring it into the body and a deed, so it isn't only a thought: say it aloud, stand or turn toward Him, an act of kindness or giving, a blessing over food, a mitzvah that fits them and the day, done with the truth in mind.
+4. Then set it into their day: one moment to return to it (when the feeling comes, on waking, at night), in their own words, and invite them to come back and say how it went. When they come back, start from what happened and go deeper.
+Keep each reply to the step they are on. If they only want to talk, or ask a question, answer it; the steps wait.
 
 Give one integrated understanding, not a collection of good points. Before you write, work out the one thing that is really going on for this person (the root, from the method, in their own terms) and the one Chassidic turn that answers it. Then let the whole reply grow out of that single thread: why it keeps happening, what to decide, the practical steps and the contemplation are the same insight seen from different sides, and each should visibly connect back to it (a practical tip should read as that insight applied, not as a separate tip). Open with the understanding, then show what it changes in each concrete part of their situation. Write it as one flowing explanation, the way a wise mashpia who also understands the mind would talk it through; use headings or lists only where they truly help.
 
@@ -876,13 +883,15 @@ function kgHint(){   // a few ids worth opening, matched to their recent words: 
   const all = [...root, ...hits];
   return all.length ? `\n\n[From the page: in the library, likely relevant to this: ${all.map(h=>h.id+' ('+h.title+')').join('; ')}; and always root:frame and root:ways]` : '';
 }
+let plainSafety = false;
+const SAFETY_NOTE = `\n\n[From the page: this message contains words that can signal danger. Read it carefully. If they may be at risk of harming themselves or someone else, or being harmed, safety comes first: say you're glad they told you, ask plainly if they are safe right now, give the crisis line for where they are (in the US, call or text 988; in immediate danger, 911), and stay with them in the conversation. If they are saying they are NOT in danger (for example "I'm not suicidal, just tired"), believe them, don't treat it as a crisis, and don't repeat a crisis message; keep going with what they came for, gently, and leave the door open.]`;
 function plainTurns(extra){
   const T0 = [];
   transcript.slice(-40).forEach(m=>{ const role = m.role==='me' ? 'user' : 'assistant'; if(T0.length && T0[T0.length-1].role===role) T0[T0.length-1].content += '\n\n'+m.text; else T0.push({role, content:m.text}); });
   while(T0.length && T0[0].role!=='user') T0.shift();
   if(!T0.length) return [{role:'user', content:PLAIN_NOTE+(extra||'')}];
   T0[0].content = PLAIN_NOTE + T0[0].content;
-  T0[T0.length-1].content += (extra||'') + kgHint();
+  T0[T0.length-1].content += (extra||'') + kgHint() + (plainSafety ? SAFETY_NOTE : '');
   return T0;
 }
 async function plainReply(){
@@ -895,6 +904,7 @@ async function plainReply(){
   }catch(e){ if(e && e.code==='tools_unavailable') PLAIN_TOOLS = false; else { el.remove(); throw e; } }
   if(!r) r = await sample(plainTurns(kgContext(used)), {...opts, cache:false});
   const reply = String(r.text||'').trim(); lastTier = r.modelTierApplied || 'unknown';
+  plainSafety = false;
   el.classList.remove('thinking'); renderGuide(el, reply);
   transcript.push({role:'guide', text:reply});
   fbAttach(el, {mode:'chat (plain Claude + research library)', message:fbLastMine(true), reply});
@@ -971,7 +981,11 @@ async function go(text){
   if(sitting && !sitting.paused && sitting.phase!=='done') pauseSit();
   if(cwWidgetLive() && cwH.kind==='cwhold') cwWidgetStop(false);   // they wrote during the quiet minute: it counts as stayed, and the talk goes on from here
 
-  if(CRISIS.test(text) || CRISIS_INTL.test(text)){ crisisReply(); busy=false; send.disabled=false; renderCw(); return; }
+  const crisisWords = CRISIS.test(text) || CRISIS_INTL.test(text);
+  if(crisisWords && !PLAIN){ crisisReply(); busy=false; send.disabled=false; renderCw(); return; }
+  // D57: in plain mode the page never answers crisis words with a fixed message. A tired "I'm not suicidal" was cut off
+  // with a hotline three times running. Claude reads the words with a safety note and judges, the way a person would.
+  if(crisisWords && PLAIN) plainSafety = true;
 
   try{
     if(PLAIN){ status.textContent=T('listening'); await plainReply(); busy=false; send.disabled=false; renderCw(); return; }
@@ -3061,7 +3075,7 @@ $('langSel').addEventListener('change',e=>{ setLang(e.target.value, true); });
 // ---------- the owner's feedback on the guide's replies: shown only to the artifact's owner, never on the public site.
 // Two loops: the latest notes go straight into the next prompts, so the guide adapts at once (this device, the last 20);
 // and each note is written to the artifact's db, collection "feedback", as the record the constitution is revised from.
-const PAGE_VERSION = '0d2554a90c';
+const PAGE_VERSION = 'ba09eade23';
 const FB_TAGS = ['too_long','too_short','preachy','didnt_hear','robotic','wrong_teaching','not_natural','loved'];
 const FB_TAG_EN = {too_long:'too long', too_short:'too short', preachy:'preachy', didnt_hear:"didn't hear me", robotic:'robotic, stiff', wrong_teaching:'wrong teaching', not_natural:'not natural', loved:'loved this'};
 const FB_MAX = 20, FB_CAP = 2048, FB_FATAL = /^(invalid_argument|quota_exceeded|resource_exhausted|revoked|not_granted|capability_disabled|capability_removed|transform_error)$/;
