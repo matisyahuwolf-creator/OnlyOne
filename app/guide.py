@@ -66,6 +66,14 @@ SITE_PER_DAY = _num("GUIDE_SITE_REPLIES_PER_DAY", 2000)  # everyone, one day: th
 TRUST_PROXY = os.getenv("GUIDE_TRUST_PROXY", "1").strip().lower() not in ("0", "false", "no", "off")
 OWNER_CODE = os.getenv("GUIDE_OWNER_CODE", "").strip()
 DB = Path(os.getenv("GUIDE_DB") or Path(__file__).resolve().parent.parent / "guide_usage.db")
+# Saved conversations (D54): the owner reads them to improve the guide. On whenever DATABASE_URL is set (a Postgres
+# that survives restarts, e.g. a free Neon database), or GUIDE_LOG=1 (then a local file, which a free host may wipe).
+# The page tells visitors plainly that chats are saved. No IP addresses are kept; old chats are deleted after
+# GUIDE_LOG_DAYS days.
+DB_URL = os.getenv("DATABASE_URL", "").strip()
+LOG_ON = bool(DB_URL) or _flag("GUIDE_LOG")
+LOG_DAYS = _num("GUIDE_LOG_DAYS", 90)
+LOG_NEW_PER_DAY = 40      # new conversations one visitor may start in a day
 
 # The page's kinds of call, by how their prompts begin (public mode answers nothing else).
 HEADS = ("You keep a small, honest profile of a person",   # listening
@@ -94,7 +102,8 @@ SHIM = r"""<script>
   const PUBLIC = __PUBLIC__;
   window.OO_SITE = true;   // served here, not inside claude.ai: the page may translate its words at once
   window.OO_TTS = __TTS__;   // a real voice (ElevenLabs) for reading meditations aloud, when configured
-  window.OO_FEEDBACK_EMAIL = __FEEDBACK__;   // "Send this chat" opens the person's email to this address (GUIDE_FEEDBACK_EMAIL); empty: share or copy
+  window.OO_FEEDBACK_EMAIL = __FEEDBACK__;
+  window.OO_LOG = __LOG__;   // conversations are saved for the owner (the page says so under the chat)   // "Send this chat" opens the person's email to this address (GUIDE_FEEDBACK_EMAIL); empty: share or copy
   let code = PUBLIC ? '' : (localStorage.getItem('mashpia_code') || '');
   async function ok(c){ try{ return (await fetch('/guide/check',{headers:{'X-Chat-Code':c}})).ok; }catch(e){ return false; } }
   async function ensure(){
@@ -315,7 +324,7 @@ def guide_page(request: Request) -> HTMLResponse:
     html, _ = _page()
     head = '<!doctype html><html lang="en"><head><meta charset="utf-8">' \
            '<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">'
-    doc = head + SHIM.replace("__ROUNDS__", str(MAX_ROUNDS)).replace("__PUBLIC__", "true" if PUBLIC else "false").replace("__FEEDBACK__", json.dumps(os.getenv("GUIDE_FEEDBACK_EMAIL", "").strip()).replace("<", "\\u003c")).replace("__TTS__", "true" if (os.getenv("ELEVENLABS_API_KEY", "").strip() and os.getenv("ELEVENLABS_VOICE_ID", "").strip()) else "false") + "</head><body>" + html + "</body></html>"
+    doc = head + SHIM.replace("__ROUNDS__", str(MAX_ROUNDS)).replace("__PUBLIC__", "true" if PUBLIC else "false").replace("__LOG__", "true" if LOG_ON else "false").replace("__FEEDBACK__", json.dumps(os.getenv("GUIDE_FEEDBACK_EMAIL", "").strip()).replace("<", "\\u003c")).replace("__TTS__", "true" if (os.getenv("ELEVENLABS_API_KEY", "").strip() and os.getenv("ELEVENLABS_VOICE_ID", "").strip()) else "false") + "</head><body>" + html + "</body></html>"
     if "gzip" in request.headers.get("accept-encoding", ""):
         # the page is ~2 MB of text; compressed it is about a fifth, which matters on a slow phone
         gz = _page_cache["gz"].get(PUBLIC) or _page_cache["gz"].setdefault(PUBLIC, gzip.compress(doc.encode("utf-8"), 6))
@@ -463,6 +472,125 @@ def _tool_round(request: Request, body: dict, msgs: list[dict]):
 
     return StreamingResponse(events(), media_type="text/event-stream",
                              headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+
+# ---------- saved conversations
+
+def _chats_db():
+    """Postgres when DATABASE_URL is set, else the local SQLite file. Same table and SQL either way."""
+    if DB_URL:
+        import psycopg
+        c = psycopg.connect(DB_URL, autocommit=True)
+        ph = "%s"
+    else:
+        c = sqlite3.connect(DB, timeout=10)
+        ph = "?"
+    c.execute("""CREATE TABLE IF NOT EXISTS guide_chats (
+                   conv_id TEXT PRIMARY KEY, visitor TEXT, started DOUBLE PRECISION NOT NULL,
+                   updated DOUBLE PRECISION NOT NULL, turns INTEGER NOT NULL, first_msg TEXT, transcript TEXT NOT NULL)""")
+    return c, ph
+
+
+def _run(sql: str, args: tuple = (), fetch: bool = False):
+    c, ph = _chats_db()
+    try:
+        cur = c.execute(sql.replace("?", ph), args)
+        rows = cur.fetchall() if fetch else None
+        if not DB_URL:
+            c.commit()
+        return rows
+    finally:
+        c.close()
+
+
+@router.post("/guide/log")
+async def guide_log(request: Request):
+    """The page sends the whole conversation after each reply; one row per conversation, replaced as it grows."""
+    if not LOG_ON:
+        raise HTTPException(404)
+    body = await request.json()
+    conv = str(body.get("conv", ""))
+    tr = body.get("transcript")
+    if not (8 <= len(conv) <= 40 and conv.isalnum()) or not isinstance(tr, list) or not tr or len(tr) > 400:
+        raise HTTPException(400, "bad conversation")
+    turns = [{"role": "me" if t.get("role") == "me" else "guide", "text": str(t.get("text", ""))[:20000]}
+             for t in tr if isinstance(t, dict)]
+    data = json.dumps(turns, ensure_ascii=False)
+    if len(data) > 400_000:
+        raise HTTPException(413, "too long")
+    visitor = request.cookies.get("oo_v", "")
+    now = time.time()
+    import asyncio
+
+    def save():
+        old = _run("SELECT visitor FROM guide_chats WHERE conv_id=?", (conv,), fetch=True)
+        if old and (old[0][0] or "") != visitor:
+            raise HTTPException(409, "not yours")
+        if not old and visitor:
+            n = _run("SELECT count(*) FROM guide_chats WHERE visitor=? AND started>?", (visitor, now - 86400), fetch=True)[0][0]
+            if n >= LOG_NEW_PER_DAY:
+                raise HTTPException(429, detail={"reason": "day"})
+        first = next((t["text"] for t in turns if t["role"] == "me"), "")[:300]
+        _run("""INSERT INTO guide_chats (conv_id, visitor, started, updated, turns, first_msg, transcript)
+                VALUES (?,?,?,?,?,?,?)
+                ON CONFLICT (conv_id) DO UPDATE SET updated=excluded.updated, turns=excluded.turns,
+                  first_msg=excluded.first_msg, transcript=excluded.transcript""",
+             (conv, visitor, now, now, sum(1 for t in turns if t["role"] == "me"), first, data))
+        _run("DELETE FROM guide_chats WHERE updated < ?", (now - 86400 * max(1, LOG_DAYS),))
+
+    await asyncio.to_thread(save)
+    return {"ok": True}
+
+
+def _owner(code: str) -> None:
+    if not OWNER_CODE or not hmac.compare_digest(code or "", OWNER_CODE):
+        raise HTTPException(404)
+
+
+@router.get("/guide/chats", response_class=HTMLResponse)
+def guide_chats(code: str = "", q: str = "", days: int = 30) -> HTMLResponse:
+    """For the owner only (GUIDE_OWNER_CODE): every saved conversation, newest first, with a search box."""
+    _owner(code)
+    import html as H
+    since = time.time() - 86400 * max(1, min(days, 3650))
+    rows = _run("SELECT conv_id, started, updated, turns, transcript FROM guide_chats WHERE updated > ? ORDER BY updated DESC LIMIT 1000",
+                (since,), fetch=True) if LOG_ON else []
+    ql = q.strip().lower()
+    items = []
+    for conv, started, updated, turns, tr in rows:
+        if ql and ql not in tr.lower():
+            continue
+        msgs = json.loads(tr)
+        first = next((m["text"] for m in msgs if m["role"] == "me"), "")
+        when = time.strftime("%a %b %d, %H:%M UTC", time.gmtime(updated))
+        body = "".join(f'<div class="m {m["role"]}"><b>{"Them" if m["role"] == "me" else "Guide"}</b>{H.escape(m["text"])}</div>' for m in msgs)
+        items.append(f'<details><summary><span class="when">{when} · {turns} message{"s" if turns != 1 else ""}</span>{H.escape(first[:160])}</summary>{body}</details>')
+    doc = f"""<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex"><title>Only One chats</title><style>
+:root{{--bg:#f6f4ef;--card:#fff;--ink:#1f2328;--muted:#6b6f76;--line:#dcd8cf;--me:#eef3fb}}
+@media (prefers-color-scheme:dark){{:root{{--bg:#16181b;--card:#1f2226;--ink:#e8e6e1;--muted:#9aa0a6;--line:#33373c;--me:#1d2a3a}}}}
+body{{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,sans-serif}}
+.wrap{{max-width:820px;margin:0 auto;padding:20px 16px 60px}} h1{{font-size:24px;margin:0 0 4px}} .note{{color:var(--muted);font-size:14px;margin:0 0 14px}}
+form{{display:flex;gap:8px;margin:0 0 16px}} input{{flex:1;font:inherit;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--ink)}}
+button{{font:inherit;padding:8px 14px;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--ink)}}
+details{{background:var(--card);border:1px solid var(--line);border-radius:10px;margin:0 0 8px;padding:10px 14px}} summary{{cursor:pointer}}
+.when{{display:block;font-size:13px;color:var(--muted)}} .m{{white-space:pre-wrap;padding:8px 10px;border-radius:8px;margin:8px 0;overflow-wrap:anywhere}}
+.m.me{{background:var(--me)}} .m b{{display:block;font-size:12px;color:var(--muted)}}
+</style></head><body><div class="wrap"><h1>Saved conversations</h1>
+<p class="note">{len(items)} conversation{"s" if len(items) != 1 else ""} in the last {days} days{(' matching "' + H.escape(q) + '"') if q else ''}. Kept {LOG_DAYS} days. {'' if LOG_ON else 'Saving is off: set DATABASE_URL on the host.'}</p>
+<form method="get"><input type="hidden" name="code" value="{H.escape(code)}"><input name="q" value="{H.escape(q)}" placeholder="Search the chats"><input type="hidden" name="days" value="{days}"><button>Search</button></form>
+{''.join(items) or '<p class="note">Nothing yet.</p>'}</div></body></html>"""
+    return HTMLResponse(doc, headers={"Cache-Control": "no-store"})
+
+
+@router.get("/guide/chats.json")
+def guide_chats_json(code: str = "", days: int = 30) -> JSONResponse:
+    """The same conversations as data, for reading them in bulk."""
+    _owner(code)
+    rows = _run("SELECT conv_id, started, updated, turns, transcript FROM guide_chats WHERE updated > ? ORDER BY updated DESC",
+                (time.time() - 86400 * max(1, min(days, 3650)),), fetch=True) if LOG_ON else []
+    return JSONResponse([{"id": r[0], "started": r[1], "updated": r[2], "turns": r[3], "messages": json.loads(r[4])} for r in rows],
+                        headers={"Cache-Control": "no-store"})
 
 
 ELEVEN_KEY = os.getenv("ELEVENLABS_API_KEY", "").strip()

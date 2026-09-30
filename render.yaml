@@ -25,5 +25,9 @@ services:
         value: "200"
       - key: GUIDE_FEEDBACK_EMAIL  # where "Send this chat" emails a conversation the person chooses to send you
         sync: false
-      - key: GUIDE_OWNER_CODE    # opens /guide/stats for you
+      - key: DATABASE_URL        # a Postgres that keeps the saved chats (e.g. a free Neon database); leave empty to save nothing
+        sync: false
+      - key: GUIDE_LOG_DAYS      # how long saved chats are kept
+        value: "90"
+      - key: GUIDE_OWNER_CODE    # opens /guide/chats and /guide/stats for you
         generateValue: true

@@ -26,6 +26,7 @@ Set these in the host's environment settings. The key never goes in a file.
 - `GUIDE_NETWORK_FACTOR` (4): how many visitors one network (a home, an office) counts as.
 - `GUIDE_SITE_REPLIES_PER_DAY` (2000): the limit for the whole site.
 - `GUIDE_FEEDBACK_EMAIL`: your email. The "Send this chat" button opens the visitor's own email app with the whole chat addressed to you. Nothing is stored on the site.
+- `DATABASE_URL`: a Postgres database (a free Neon one works). When set, every conversation is saved and the page tells visitors so. Read them at `/guide/chats?code=<GUIDE_OWNER_CODE>` (search box included), or as data at `/guide/chats.json?code=...`. Kept `GUIDE_LOG_DAYS` days (90).
 - `GUIDE_OWNER_CODE`: opens `/guide/stats` (calls, visitors and tokens per day) with the header `X-Owner-Code`.
 
 Also set a monthly spend limit on the key in the Anthropic Console. That is the hard stop.
