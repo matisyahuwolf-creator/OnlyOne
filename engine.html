@@ -720,6 +720,13 @@ Write the guide's next message, in the language they write in. Then, on its own 
 // graph (search it; open an item and its links). Where a view can't run page tools, the page searches for it and puts the best matches in the message.
 const PLAIN = true;
 let PLAIN_TOOLS = true;
+const KG_SYN = {   // everyday words -> the words the library uses
+  drink:'craving hooked pull desire', drinking:'craving hooked pull desire', drunk:'craving hooked pull desire', alcohol:'craving hooked pull desire', beer:'craving hooked pull', wine:'craving pull', vodka:'craving hooked', whiskey:'craving hooked', smoking:'craving hooked', porn:'craving hooked lust pull', addict:'craving hooked pull', addiction:'craving hooked pull', addicted:'craving hooked pull', urge:'craving pull', urges:'craving pull', gambling:'craving hooked', phone:'craving scattered', scrolling:'craving scattered',
+  money:'livelihood worry parnassah', rent:'livelihood worry', debt:'livelihood worry', job:'livelihood work', fired:'livelihood work loss',
+  sad:'depression sadness low', depressed:'depression sadness heaviness', anxious:'anxiety worry dread', anxiety:'worry dread fear', panic:'anxiety dread fear', scared:'fear', afraid:'fear',
+  lonely:'alone loneliness', divorce:'alone loss marriage', wife:'marriage', husband:'marriage', kids:'children parenting', son:'child children parenting', daughter:'child children parenting',
+  angry:'anger', yelling:'anger', furious:'anger', guilt:'shame mistakes', ashamed:'shame', failure:'mistakes fallen shame', relapse:'fallen falling again', slipped:'fallen falling', died:'grief loss death', death:'grief loss', meaning:'purpose point', empty:'meaning empty numb', numb:'numbness nothing', god:'held unity', hashem:'held unity'
+};
 const KG_STOP = new Set('the and for that this with you your are was but not have has had from they them their what when where which who how all any can could would should will just like about into than then there here its it\'s also more most some such only very one our out get got been being over under own same too off per'.split(' '));
 const KG = (()=>{   // the research as one graph: every item has an id, a type, a title, its content, and links to other items
   const items = [], byId = {};
@@ -730,7 +737,8 @@ const KG = (()=>{   // the research as one graph: every item has an id, a type, 
     put('condition:'+c.id, 'what people carry', c.name, {name:c.name, plain:c.plain, reading:c.reading, illusions:c.illusions, reframes:c.reframes, careful:c.careful, sources:src(c.sources)}, (c.truths||[]).map(t=>'truth:'+t.id));
     (c.truths||[]).forEach(t=>put('truth:'+t.id, 'truth', t.name, {name:t.name, essential:t.essential, break:t.break, not_for:t.not_for, sources:src(t.sources)}, ['condition:'+c.id]));
   });
-  Object.values(B.healing||{}).forEach(h=>put('healing:'+h.id, 'healing method', h.title||h.name, {name:h.title||h.name, root:h.root, turn:h.turn, object:h.object, steps:(h.stages||[]).map(x=>({name:x.name, aim:x.aim, picture:x.mashal})), guards:h.guards}, [].concat((h.conditions||[]).map(x=>'condition:'+x), (h.sittings||[]).map(x=>'sitting:'+x))));
+  const condName = Object.fromEntries((B.conditions||[]).map(c=>[c.id, c.name+'. '+(c.plain||'')]));
+  Object.values(B.healing||{}).forEach(h=>put('healing:'+h.id, 'healing method', h.title||h.name, {name:h.title||h.name, for:(h.conditions||[]).map(x=>condName[x]).filter(Boolean), root:h.root, turn:h.turn, object:h.object, steps:(h.stages||[]).map(x=>({name:x.name, aim:x.aim, picture:x.mashal})), guards:h.guards}, [].concat((h.conditions||[]).map(x=>'condition:'+x), (h.sittings||[]).map(x=>'sitting:'+x))));
   Object.values(B.paths||{}).forEach(p=>put('path:'+p.id, 'meditation path', p.name, {name:p.name, for:p.for, stages:(p.stages||[]).map(x=>x && typeof x==='object' ? {name:x.name, aim:x.aim||x.purpose||''} : x)}));
   ((B.spine&&B.spine.faces)||[]).forEach(f=>put('face:'+f.id, 'face of the one idea', f.name, {name:f.name, statement:f.statement, long:f.long}));
   if(B.spine) put('spine', 'the one idea of Chassidus', 'The one idea', {thesis:B.spine.thesis, how_a_subject_traces_back:B.spine.grammar}, (B.spine.faces||[]).map(f=>'face:'+f.id));
@@ -753,9 +761,11 @@ const KG = (()=>{   // the research as one graph: every item has an id, a type, 
   const avg = items.reduce((a,it)=>a+it.len,0)/Math.max(1,items.length);
   function search(q, n){
     const sc = new Map();
-    new Set(tok(q)).forEach(w=>{ const post = idx.get(w); if(!post) return; const idf = Math.log(1 + (items.length - post.length + .5)/(post.length + .5));
+    const words = tok(q); words.slice().forEach(w=>{ const x = KG_SYN[w]; if(x) tok(x).forEach(y=>words.push(y)); });
+    new Set(words).forEach(w=>{ const post = idx.get(w); if(!post) return; const idf = Math.log(1 + (items.length - post.length + .5)/(post.length + .5));
       post.forEach(([i,f])=>{ const L = items[i].len; sc.set(i, (sc.get(i)||0) + idf * f*2.2/(f + 1.2*(.25 + .75*L/avg))); }); });
-    return [...sc.entries()].sort((a,b)=>b[1]-a[1]).slice(0, n||8).map(([i])=>items[i]);
+    const boost = t => t==='healing method' ? 1.35 : t==='what people carry' ? 1.2 : 1;
+    return [...sc.entries()].map(([i,v])=>[i, v*boost(items[i].type)]).sort((a,b)=>b[1]-a[1]).slice(0, n||8).map(([i])=>items[i]);
   }
   const snip = it => { const r = it.rec||{}; const v = r.essential||r.plain||r.statement||r.says||r.teaching||r.line||r.turn||r.distinction||r.one_reply||r.reading||r.for||r.thesis||r.inside||''; return String(Array.isArray(v) ? v.join(' ') : v).slice(0,260); };
   const brief = it => ({id:it.id, type:it.type, title:it.title, gist:snip(it)});
@@ -781,14 +791,21 @@ function kgContext(used){   // for a view without page tools: the page searches 
   if(out.length > 24000) out = out.slice(0,24000)+'…';
   return `\n\n[From the Only One research library, matched to what they just said (use it if it's relevant, ignore it if not): ${out}]`;
 }
-const PLAIN_NOTE = `[A note from the page, not from the person: You're Claude, chatting with someone on a page called Only One. The page has a research library on Chassidus (Chabad teachings on the unity of G-d) that you can draw from. Whenever the conversation touches Chassidus, Judaism, G-d, meaning or someone's inner life, look there first and base what you say about Chassidus on what you find; quote a source only as the library gives it. No need to mention the library or narrate your searching. Otherwise, just be yourself.]\n\n`;
+const PLAIN_NOTE = `[A note from the page, not from the person: You're Claude, chatting with someone on a page called Only One. The page has a research library on Chassidus (Chabad teachings on the unity of G-d) that you can draw from. Whenever the conversation touches Chassidus, Judaism, G-d, meaning or someone's inner life, look there first and base what you say about Chassidus on what you find; quote a source only as the library gives it. No need to mention the library or narrate your searching. Otherwise, just be yourself.
+
+People come to this page for how Chassidus sees their life, so when someone brings something they are struggling with, the Chassidic understanding should carry your answer, not decorate it. The library holds a worked method for most struggles: a "healing method" (its root: what is really going on underneath; its turn: the Chassidic understanding that answers it, with its reason; its one truth to hold; and its steps: a contemplation walked slowly) and a "what people carry" entry (what is really going on, the false conclusions, reframes, cautions). Search in the library's own words if everyday words miss (craving, the pull, worry, livelihood, shame, fallen, alone, held), open the method that fits, and build on it: say what is underneath in their words, bring the turn with its reason, and give them the first step of the contemplation to do now. Practical help goes alongside it, not instead of it. Keep your own judgment about safety.]\n\n`;
+function kgHint(){   // a few ids worth opening, matched to their recent words: the method and the trouble first
+  const q = transcript.filter(m=>m.role==='me').slice(-3).map(m=>m.text).join(' ');
+  const hits = KG.search(q, 12).filter(it=>it.type==='healing method' || it.type==='what people carry' || it.type==='state of consciousness').slice(0,4);
+  return hits.length ? `\n\n[From the page: in the library, likely relevant to this: ${hits.map(h=>h.id+' ('+h.title+')').join('; ')}]` : '';
+}
 function plainTurns(extra){
   const T0 = [];
   transcript.slice(-40).forEach(m=>{ const role = m.role==='me' ? 'user' : 'assistant'; if(T0.length && T0[T0.length-1].role===role) T0[T0.length-1].content += '\n\n'+m.text; else T0.push({role, content:m.text}); });
   while(T0.length && T0[0].role!=='user') T0.shift();
   if(!T0.length) return [{role:'user', content:PLAIN_NOTE+(extra||'')}];
   T0[0].content = PLAIN_NOTE + T0[0].content;
-  T0[T0.length-1].content += (extra||'');
+  T0[T0.length-1].content += (extra||'') + kgHint();
   return T0;
 }
 async function plainReply(){
@@ -2959,7 +2976,7 @@ $('langSel').addEventListener('change',e=>{ setLang(e.target.value, true); });
 // ---------- the owner's feedback on the guide's replies: shown only to the artifact's owner, never on the public site.
 // Two loops: the latest notes go straight into the next prompts, so the guide adapts at once (this device, the last 20);
 // and each note is written to the artifact's db, collection "feedback", as the record the constitution is revised from.
-const PAGE_VERSION = '89095c58d8';
+const PAGE_VERSION = '9c39c51691';
 const FB_TAGS = ['too_long','too_short','preachy','didnt_hear','robotic','wrong_teaching','not_natural','loved'];
 const FB_TAG_EN = {too_long:'too long', too_short:'too short', preachy:'preachy', didnt_hear:"didn't hear me", robotic:'robotic, stiff', wrong_teaching:'wrong teaching', not_natural:'not natural', loved:'loved this'};
 const FB_MAX = 20, FB_CAP = 2048, FB_FATAL = /^(invalid_argument|quota_exceeded|resource_exhausted|revoked|not_granted|capability_disabled|capability_removed|transform_error)$/;
