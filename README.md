@@ -25,6 +25,7 @@ Set these in the host's environment settings. The key never goes in a file.
 - `GUIDE_REPLIES_PER_HOUR` (default 30) and `GUIDE_REPLIES_PER_DAY` (100): the limits for each visitor.
 - `GUIDE_NETWORK_FACTOR` (4): how many visitors one network (a home, an office) counts as.
 - `GUIDE_SITE_REPLIES_PER_DAY` (2000): the limit for the whole site.
+- `GUIDE_FEEDBACK_EMAIL`: your email. The "Send this chat" button opens the visitor's own email app with the whole chat addressed to you. Nothing is stored on the site.
 - `GUIDE_OWNER_CODE`: opens `/guide/stats` (calls, visitors and tokens per day) with the header `X-Owner-Code`.
 
 Also set a monthly spend limit on the key in the Anthropic Console. That is the hard stop.

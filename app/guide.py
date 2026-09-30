@@ -94,6 +94,7 @@ SHIM = r"""<script>
   const PUBLIC = __PUBLIC__;
   window.OO_SITE = true;   // served here, not inside claude.ai: the page may translate its words at once
   window.OO_TTS = __TTS__;   // a real voice (ElevenLabs) for reading meditations aloud, when configured
+  window.OO_FEEDBACK_EMAIL = __FEEDBACK__;   // "Send this chat" opens the person's email to this address (GUIDE_FEEDBACK_EMAIL); empty: share or copy
   let code = PUBLIC ? '' : (localStorage.getItem('mashpia_code') || '');
   async function ok(c){ try{ return (await fetch('/guide/check',{headers:{'X-Chat-Code':c}})).ok; }catch(e){ return false; } }
   async function ensure(){
@@ -314,7 +315,7 @@ def guide_page(request: Request) -> HTMLResponse:
     html, _ = _page()
     head = '<!doctype html><html lang="en"><head><meta charset="utf-8">' \
            '<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">'
-    doc = head + SHIM.replace("__ROUNDS__", str(MAX_ROUNDS)).replace("__PUBLIC__", "true" if PUBLIC else "false").replace("__TTS__", "true" if (os.getenv("ELEVENLABS_API_KEY", "").strip() and os.getenv("ELEVENLABS_VOICE_ID", "").strip()) else "false") + "</head><body>" + html + "</body></html>"
+    doc = head + SHIM.replace("__ROUNDS__", str(MAX_ROUNDS)).replace("__PUBLIC__", "true" if PUBLIC else "false").replace("__FEEDBACK__", json.dumps(os.getenv("GUIDE_FEEDBACK_EMAIL", "").strip()).replace("<", "\\u003c")).replace("__TTS__", "true" if (os.getenv("ELEVENLABS_API_KEY", "").strip() and os.getenv("ELEVENLABS_VOICE_ID", "").strip()) else "false") + "</head><body>" + html + "</body></html>"
     if "gzip" in request.headers.get("accept-encoding", ""):
         # the page is ~2 MB of text; compressed it is about a fifth, which matters on a slow phone
         gz = _page_cache["gz"].get(PUBLIC) or _page_cache["gz"].setdefault(PUBLIC, gzip.compress(doc.encode("utf-8"), 6))

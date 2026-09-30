@@ -23,5 +23,7 @@ services:
         value: "10"
       - key: GUIDE_SITE_REPLIES_PER_DAY
         value: "200"
+      - key: GUIDE_FEEDBACK_EMAIL  # where "Send this chat" emails a conversation the person chooses to send you
+        sync: false
       - key: GUIDE_OWNER_CODE    # opens /guide/stats for you
         generateValue: true
