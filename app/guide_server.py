@@ -10,10 +10,11 @@ GUIDE_PUBLIC=1 (anyone with the link, under the ceilings in app/guide.py).
 from fastapi import FastAPI
 from fastapi.responses import RedirectResponse
 
-from . import guide
+from . import guide, library
 
 app = FastAPI(title="Only One", docs_url=None, redoc_url=None, openapi_url=None)
 app.include_router(guide.router)
+app.include_router(library.router)
 
 
 @app.get("/", include_in_schema=False)

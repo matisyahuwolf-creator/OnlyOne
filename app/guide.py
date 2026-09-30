@@ -98,6 +98,19 @@ KG_TOOLS = [
      "description": "Searches the full Hebrew text of the Tanya for words or a phrase (write them in Hebrew, without vowels) and returns up to 8 paragraphs with their references.",
      "input_schema": {"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]}},
 ]
+from . import library as _lib
+if _lib.ON:   # D56: the whole library, from Neo4j; the tools run in the browser and call /guide/lib/*
+    KG_TOOLS += [
+        {"name": "search_library",
+         "description": "Searches the whole library: every Chassidic work (the Baal Shem Tov and his students, all the Chabad Rebbeim and their books), the Sefaria shelves (Tanakh, Midrash, Kabbalah, Musar, Jewish thought), the teachers' books and talks (Bilvavi, Rav Morgenstern, Rav Weinberger, Rav Asher Freund, Rav Joey Rosenfeld and others). Returns up to 8 passages with id, reference, work, author and text. Write the words in Hebrew for Hebrew sources (vowels not needed; prefixes like ו, ה, ב are handled); put an exact phrase in quotes. Optional work and author narrow it.",
+         "input_schema": {"type": "object", "properties": {"query": {"type": "string"}, "work": {"type": "string"}, "author": {"type": "string"}}, "required": ["query"]}},
+        {"name": "read_passage",
+         "description": "Opens one passage from search_library by its id: the whole exact text, a translation when the source has one, its concepts, and the passages right before and after it. Quote only from what this returns.",
+         "input_schema": {"type": "object", "properties": {"id": {"type": "string"}, "around": {"type": "integer", "description": "how many passages before and after (0-4, default 1)"}}, "required": ["id"]}},
+        {"name": "related_passages",
+         "description": "Follows the graph from one passage: its concepts (of the 22 Chassidic pillars), and passages by other authors and works on the same concepts.",
+         "input_schema": {"type": "object", "properties": {"id": {"type": "string"}}, "required": ["id"]}},
+    ]
 KG_NAMES = {t["name"] for t in KG_TOOLS}
 MAX_ROUNDS = 6   # tool rounds in one reply; the last one must answer
 BLOCK_TYPES = {"text", "tool_use", "tool_result", "thinking", "redacted_thinking", "fallback"}
@@ -109,7 +122,8 @@ SHIM = r"""<script>
   window.OO_SITE = true;   // served here, not inside claude.ai: the page may translate its words at once
   window.OO_TTS = __TTS__;   // a real voice (ElevenLabs) for reading meditations aloud, when configured
   window.OO_FEEDBACK_EMAIL = __FEEDBACK__;
-  window.OO_LOG = __LOG__;   // conversations are saved for the owner (the page says so under the chat)   // "Send this chat" opens the person's email to this address (GUIDE_FEEDBACK_EMAIL); empty: share or copy
+  window.OO_LOG = __LOG__;
+  window.OO_LIB = __LIB__;   // the whole library is connected (Neo4j), searchable from the chat   // conversations are saved for the owner (the page says so under the chat)   // "Send this chat" opens the person's email to this address (GUIDE_FEEDBACK_EMAIL); empty: share or copy
   let code = PUBLIC ? '' : (localStorage.getItem('mashpia_code') || '');
   async function ok(c){ try{ return (await fetch('/guide/check',{headers:{'X-Chat-Code':c}})).ok; }catch(e){ return false; } }
   async function ensure(){
@@ -330,7 +344,7 @@ def guide_page(request: Request) -> HTMLResponse:
     html, _ = _page()
     head = '<!doctype html><html lang="en"><head><meta charset="utf-8">' \
            '<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">'
-    doc = head + SHIM.replace("__ROUNDS__", str(MAX_ROUNDS)).replace("__PUBLIC__", "true" if PUBLIC else "false").replace("__LOG__", "true" if LOG_ON else "false").replace("__FEEDBACK__", json.dumps(os.getenv("GUIDE_FEEDBACK_EMAIL", "").strip()).replace("<", "\\u003c")).replace("__TTS__", "true" if (os.getenv("ELEVENLABS_API_KEY", "").strip() and os.getenv("ELEVENLABS_VOICE_ID", "").strip()) else "false") + "</head><body>" + html + "</body></html>"
+    doc = head + SHIM.replace("__ROUNDS__", str(MAX_ROUNDS)).replace("__PUBLIC__", "true" if PUBLIC else "false").replace("__LOG__", "true" if LOG_ON else "false").replace("__LIB__", "true" if _lib.ON else "false").replace("__FEEDBACK__", json.dumps(os.getenv("GUIDE_FEEDBACK_EMAIL", "").strip()).replace("<", "\\u003c")).replace("__TTS__", "true" if (os.getenv("ELEVENLABS_API_KEY", "").strip() and os.getenv("ELEVENLABS_VOICE_ID", "").strip()) else "false") + "</head><body>" + html + "</body></html>"
     if "gzip" in request.headers.get("accept-encoding", ""):
         # the page is ~2 MB of text; compressed it is about a fifth, which matters on a slow phone
         gz = _page_cache["gz"].get(PUBLIC) or _page_cache["gz"].setdefault(PUBLIC, gzip.compress(doc.encode("utf-8"), 6))

@@ -25,6 +25,12 @@ services:
         value: "200"
       - key: GUIDE_FEEDBACK_EMAIL  # where "Send this chat" emails a conversation the person chooses to send you
         sync: false
+      - key: NEO4J_URI           # the library graph (neo4j+s://...databases.neo4j.io); with the two below, the chat can search everything
+        sync: false
+      - key: NEO4J_USERNAME
+        sync: false
+      - key: NEO4J_PASSWORD
+        sync: false
       - key: DATABASE_URL        # a Postgres that keeps the saved chats (e.g. a free Neon database); leave empty to save nothing
         sync: false
       - key: GUIDE_LOG_DAYS      # how long saved chats are kept

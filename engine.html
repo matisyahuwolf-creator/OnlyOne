@@ -814,6 +814,26 @@ function searchTanya(q){
   hits.sort((a,b)=>b[0]-a[0]);
   return hits.slice(0,8).map(([n,r,t])=>{ const i = Math.max(0, t.indexOf(words.find(w=>t.includes(w)))-80); return {ref:r, text:t.slice(i, i+260)}; });
 }
+// ---------- THE WHOLE LIBRARY (D56): on the website, when it is connected to the Neo4j library graph
+async function libGet(path, params){
+  const u = new URL(path, location.origin); Object.entries(params).forEach(([k,v])=>{ if(v!=null && v!=='') u.searchParams.set(k, v); });
+  const r = await fetch(u, {credentials:'same-origin'});
+  if(!r.ok) throw new Error(r.status===404 ? 'Not found.' : 'The library is not answering right now ('+r.status+').');
+  return r.json();
+}
+function libTools(used){
+  return [
+    {name:'search_library', description:'Searches the whole library: every Chassidic work, the Sefaria shelves, and the teachers. Returns passages with id, reference, work, author and text. Hebrew words for Hebrew sources; an exact phrase in quotes; optional work and author.',
+     inputSchema:{type:'object', properties:{query:{type:'string'}, work:{type:'string'}, author:{type:'string'}}, required:['query']},
+     execute: async (inp)=>{ const q = String(inp && inp.query || '').slice(0,300); used.push('searched the library: '+q); const r = await libGet('/guide/lib/search', {q, work: inp && inp.work, author: inp && inp.author}); return r.results && r.results.length ? r.results : 'Nothing has all those words. Try fewer words, other words, or Hebrew.'; }},
+    {name:'read_passage', description:'Opens one passage by id: the whole exact text, a translation when there is one, its concepts, and the passages around it. Quote only from what this returns.',
+     inputSchema:{type:'object', properties:{id:{type:'string'}, around:{type:'integer'}}, required:['id']},
+     execute: async (inp)=>{ const r = await libGet('/guide/lib/read', {id: String(inp && inp.id || ''), around: inp && inp.around}); used.push('read: '+r.work+', '+r.ref); return r; }},
+    {name:'related_passages', description:'Follows the graph from one passage: its concepts, and passages by other authors on the same concepts.',
+     inputSchema:{type:'object', properties:{id:{type:'string'}}, required:['id']},
+     execute: async (inp)=>{ const r = await libGet('/guide/lib/related', {id: String(inp && inp.id || '')}); used.push('followed the graph from '+String(inp && inp.id || '')); return r; }}
+  ];
+}
 function kgTools(used){
   return [
     {name:'search_research', description:'Searches the Only One research library on Chassidus (Chabad teachings on the unity of G-d): core truths with checked Hebrew sources, what people commonly carry and what the sources say about it, states of consciousness and the movements between them, healing methods, meditations and techniques, perception shifts, and explanations of why a person is held by G-d. Returns up to 8 matches, each with an id, type, title and gist. Use a few plain English keywords.',
@@ -828,7 +848,7 @@ function kgTools(used){
     {name:'search_tanya', description:'Searches the full Hebrew text of the Tanya for words or a phrase (write them in Hebrew, without vowels) and returns up to 8 paragraphs with their references.',
      inputSchema:{type:'object', properties:{query:{type:'string'}}, required:['query']},
      execute:(inp)=>{ const q = String(inp && inp.query || '').slice(0,200); used.push('searched the Tanya: '+q); const r = searchTanya(q); return r.length ? r : 'No paragraph has those words. Try fewer or different Hebrew words.'; }}
-  ];
+  ].concat(window.OO_LIB ? libTools(used) : []);
 }
 function kgContext(used){   // for a view without page tools: the page searches with their recent words and hands over the best few
   const q = transcript.filter(m=>m.role==='me').slice(-2).map(m=>m.text).join(' ');
@@ -848,7 +868,7 @@ The lens for any struggle (open "root:frame" and "root:ways", and the "root:" en
 
 Give one integrated understanding, not a collection of good points. Before you write, work out the one thing that is really going on for this person (the root, from the method, in their own terms) and the one Chassidic turn that answers it. Then let the whole reply grow out of that single thread: why it keeps happening, what to decide, the practical steps and the contemplation are the same insight seen from different sides, and each should visibly connect back to it (a practical tip should read as that insight applied, not as a separate tip). Open with the understanding, then show what it changes in each concrete part of their situation. Write it as one flowing explanation, the way a wise mashpia who also understands the mind would talk it through; use headings or lists only where they truly help.
 
-Don't explain Chassidus; speak it. Say what is true directly, as your own understanding, in plain everyday words that anyone of any background can feel and recognize from their own life: no "Chassidus says", "the sources say", "the Tanya teaches", no book or rebbe names, no quotes, no Hebrew or Yiddish terms. The depth should come through in how true and precise it is, not in where it comes from. Only if they ask where something comes from, tell them simply. When someone asks about a specific chapter or letter of the Tanya, or asks for the exact words, open it with read_tanya and answer from its actual text; then quoting is right, and quote only what you opened. Never say you don't have the text.]\n\n`;
+Don't explain Chassidus; speak it. Say what is true directly, as your own understanding, in plain everyday words that anyone of any background can feel and recognize from their own life: no "Chassidus says", "the sources say", "the Tanya teaches", no book or rebbe names, no quotes, no Hebrew or Yiddish terms. The depth should come through in how true and precise it is, not in where it comes from. Only if they ask where something comes from, tell them simply. When someone asks about a specific chapter or letter of the Tanya, or asks for the exact words, open it with read_tanya and answer from its actual text; then quoting is right, and quote only what you opened. Never say you don't have the text. When the whole library is connected (search_library is among your tools), the same holds for any source in it: search it, open the passage, and quote only what you opened.]\n\n`;
 function kgHint(){   // a few ids worth opening, matched to their recent words: the method and the trouble first
   const q = transcript.filter(m=>m.role==='me').slice(-3).map(m=>m.text).join(' ');
   const hits = KG.search(q, 12).filter(it=>it.type==='healing method' || it.type==='what people carry' || it.type==='state of consciousness').slice(0,4);
@@ -3041,7 +3061,7 @@ $('langSel').addEventListener('change',e=>{ setLang(e.target.value, true); });
 // ---------- the owner's feedback on the guide's replies: shown only to the artifact's owner, never on the public site.
 // Two loops: the latest notes go straight into the next prompts, so the guide adapts at once (this device, the last 20);
 // and each note is written to the artifact's db, collection "feedback", as the record the constitution is revised from.
-const PAGE_VERSION = '7cfa79808b';
+const PAGE_VERSION = '0d2554a90c';
 const FB_TAGS = ['too_long','too_short','preachy','didnt_hear','robotic','wrong_teaching','not_natural','loved'];
 const FB_TAG_EN = {too_long:'too long', too_short:'too short', preachy:'preachy', didnt_hear:"didn't hear me", robotic:'robotic, stiff', wrong_teaching:'wrong teaching', not_natural:'not natural', loved:'loved this'};
 const FB_MAX = 20, FB_CAP = 2048, FB_FATAL = /^(invalid_argument|quota_exceeded|resource_exhausted|revoked|not_granted|capability_disabled|capability_removed|transform_error)$/;
