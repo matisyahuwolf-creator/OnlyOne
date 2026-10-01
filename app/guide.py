@@ -568,7 +568,7 @@ def _owner(code: str) -> None:
 
 
 @router.get("/guide/chats", response_class=HTMLResponse)
-def guide_chats(code: str = "", q: str = "", days: int = 30) -> HTMLResponse:
+def guide_chats(code: str = "", q: str = "", days: int = 30, view: str = "chats") -> HTMLResponse:
     """For the owner only (GUIDE_OWNER_CODE): every saved conversation, newest first, with a search box."""
     _owner(code)
     import html as H
@@ -577,7 +577,18 @@ def guide_chats(code: str = "", q: str = "", days: int = 30) -> HTMLResponse:
                 (since,), fetch=True) if LOG_ON else []
     ql = q.strip().lower()
     items = []
-    for conv, started, updated, turns, tr in rows:
+    if view == "questions":   # every message people wrote, newest first: what they actually ask
+        skip = {"go deeper on that.", "go deeper"}
+        for conv, started, updated, turns, tr in rows:
+            msgs = json.loads(tr)
+            when = time.strftime("%b %d, %H:%M", time.gmtime(updated))
+            for i, m in enumerate(msgs):
+                t = m["text"].strip()
+                if m["role"] != "me" or t.lower() in skip or (ql and ql not in t.lower()):
+                    continue
+                reply = next((x["text"] for x in msgs[i + 1:] if x["role"] == "guide"), "")
+                items.append(f'<details><summary><span class="when">{when}</span>{H.escape(t[:400])}</summary><div class="m guide"><b>Guide</b>{H.escape(reply)}</div></details>')
+    for conv, started, updated, turns, tr in (rows if view != "questions" else []):
         if ql and ql not in tr.lower():
             continue
         msgs = json.loads(tr)
@@ -595,10 +606,11 @@ form{{display:flex;gap:8px;margin:0 0 16px}} input{{flex:1;font:inherit;padding:
 button{{font:inherit;padding:8px 14px;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--ink)}}
 details{{background:var(--card);border:1px solid var(--line);border-radius:10px;margin:0 0 8px;padding:10px 14px}} summary{{cursor:pointer}}
 .when{{display:block;font-size:13px;color:var(--muted)}} .m{{white-space:pre-wrap;padding:8px 10px;border-radius:8px;margin:8px 0;overflow-wrap:anywhere}}
-.m.me{{background:var(--me)}} .m b{{display:block;font-size:12px;color:var(--muted)}}
+.m.me{{background:var(--me)}} .tabs a{{margin-right:14px;color:var(--muted);text-decoration:none}} .tabs a.on{{color:var(--ink);font-weight:600;border-bottom:2px solid var(--ink)}} .m b{{display:block;font-size:12px;color:var(--muted)}}
 </style></head><body><div class="wrap"><h1>Saved conversations</h1>
-<p class="note">{len(items)} conversation{"s" if len(items) != 1 else ""} in the last {days} days{(' matching "' + H.escape(q) + '"') if q else ''}. Kept {LOG_DAYS} days. {'' if LOG_ON else 'Saving is off: set DATABASE_URL on the host.'}</p>
-<form method="get"><input type="hidden" name="code" value="{H.escape(code)}"><input name="q" value="{H.escape(q)}" placeholder="Search the chats"><input type="hidden" name="days" value="{days}"><button>Search</button></form>
+<p class="note">{len(items)} {"question" if view == "questions" else "conversation"}{"s" if len(items) != 1 else ""} in the last {days} days{(' matching "' + H.escape(q) + '"') if q else ''}. Kept {LOG_DAYS} days. {'' if LOG_ON else 'Saving is off: set DATABASE_URL on the host.'}</p>
+<p class="tabs"><a href="?code={H.escape(code)}&days={days}"{' class="on"' if view != "questions" else ''}>Conversations</a> <a href="?code={H.escape(code)}&days={days}&view=questions"{' class="on"' if view == "questions" else ''}>Questions</a></p>
+<form method="get"><input type="hidden" name="code" value="{H.escape(code)}"><input type="hidden" name="view" value="{H.escape(view)}"><input name="q" value="{H.escape(q)}" placeholder="Search the chats"><input type="hidden" name="days" value="{days}"><button>Search</button></form>
 {''.join(items) or '<p class="note">Nothing yet.</p>'}</div></body></html>"""
     return HTMLResponse(doc, headers={"Cache-Control": "no-store"})
 
