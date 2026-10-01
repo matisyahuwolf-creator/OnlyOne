@@ -2478,10 +2478,10 @@ function lsRoom(){
 function lsClear(st, head, sub){ st.box.textContent=''; if(head) st.box.appendChild(mk('div',head,'head')); if(sub) st.box.appendChild(mk('div',sub,'sub')); }
 function lsCtl(st){ const c = st.box.appendChild(mk('div','','ctl')); const p = c.appendChild(mk('button', st.paused ? T('sit_resume') : T('sit_pause'))); p.onclick=()=>{ st.paused=!st.paused; p.textContent = st.paused ? T('sit_resume') : T('sit_pause'); }; const l = c.appendChild(mk('button', T('ls_leave'))); l.onclick=()=>lsLeave(st); }
 function lsTaps(st, q, opts){ return new Promise(res=>{ const a = st.box.appendChild(mk('div','','')); a.appendChild(mk('p', q, 'q')); const g = a.appendChild(mk('div','','taps')); opts.forEach(([k,label])=>{ const b = g.appendChild(mk('button', label)); b.onclick=()=>{ a.remove(); res(k); }; }); st.resolveLeave = ()=>res('__leave'); }); }
-async function lsLines(st, lines, head, sub, total){
+async function lsLines(st, lines, head, sub, total, live){
   for(let i=0;i<lines.length;i++){
     if(st.dead) return false;
-    const [say, sil] = lines[i];
+    const [say, sil] = (live && live.lines && live.lines[i]) ? live.lines[i] : lines[i];
     lsClear(st, head, sub);
     if(total){ const d = st.box.appendChild(mk('div','','dots')); for(let k=0;k<total;k++) d.appendChild(document.createElement('i')).className = k<=i ? 'on' : ''; }
     const ln = st.box.appendChild(mk('div','','line')); renderGuide(ln, say); lsCtl(st);
@@ -2490,6 +2490,31 @@ async function lsLines(st, lines, head, sub, total){
     if(sil && !await lsWait(sil*1000)) return false;
   }
   return true;
+}
+
+// written live (D82): the technique's steps stay as the books give them; the AI rewrites each line from this person's
+// own conversation. The prewritten line shows first; the personal lines replace the rest the moment they arrive.
+function lsPersonalize(st, tech, base, live){
+  const mine = transcript.filter(m=>m.role==='me');
+  if(!sample || !mine.length) return;
+  const convo = transcript.slice(-14).map(m=>(m.role==='me'?'PERSON: ':'GUIDE: ')+String(m.text).slice(0,700)).join('\n');
+  const prompt = `You are writing the spoken lines of one live guided meditation for one person. The technique and its steps come from the Chabad sources and must stay exactly as they are; you only rewrite the wording so it is about THIS person's own life.
+
+THE TECHNIQUE: ${tech.name}. Why it works: ${tech.toward||''}
+ITS LINES, in order (keep the same number, the same step in each, the same meaning and truth; each under 22 words):
+${base.map((l,i)=>(i+1)+'. '+l[0]).join('\n')}
+
+WHAT THEY SAID IN THE CONVERSATION (use their real objects, places, people, work and worry where it fits naturally; not in every line):
+${convo}
+
+RULES: plain spoken English (or the language they write in), second person, calm, one thought per line. Don't add steps, explanations or praise. Don't claim anything about G-d they haven't shown they believe${lsBeliever() ? ' (they do believe, so G-d may be named as in the original)' : ''}. Never tell them what they feel. Keep the truth exact.
+
+Return only JSON: {"lines":["line 1","line 2",...]} with exactly ${base.length} lines.`;
+  Promise.resolve().then(()=>sample.json(prompt, {modelTier:'default', cache:false})).then(r=>{
+    const L = r && Array.isArray(r.lines) ? r.lines.map(x=>String(x||'').trim()) : null;
+    if(!L || L.length !== base.length || L.some(x=>!x || x.length > 240) || st.dead) return;
+    live.lines = L.map((t,i)=>[t, base[i][1]]); st.personal = (st.personal||0) + 1;
+  }).catch(()=>{});
 }
 async function lsLeave(st){ if(st.dead || st.leaving) return; st.leaving = true; st.left = true; if(st.resolveLeave) st.resolveLeave(); }
 async function lsGX(st){ st.leaving = false; await lsLines(st, (B.tx.gx||[]).map(x=>[x[0], Math.min(x[1]||6, 6)]), T('ls_ground')); }
@@ -2523,7 +2548,8 @@ async function startSession(){
         st.blocks++; st.done.push(tech.id); if(!st.states.includes(state)) st.states.push(state);
         let lines = (lsBeliever() && tech.believer.length ? tech.believer : tech.script);
         if(smaller){ lines = lines.slice(0, Math.max(3, Math.ceil(lines.length/2))).map(([a,b])=>[a, Math.round((b||8)*0.7)]); smaller = false; }
-        const ok = await lsLines(st, lines, tech.name, T('ls_block',{n:st.blocks,k:budget}), lines.length);
+        const live = {lines:null}; lsPersonalize(st, tech, lines, live);
+        const ok = await lsLines(st, lines, tech.name, T('ls_block',{n:st.blocks,k:budget}), lines.length, live);
         if(!ok || st.left) break;
         if(st.blocks >= budget) break;
         lsClear(st, tech.name); lsCtl(st);
@@ -2567,7 +2593,7 @@ async function startSession(){
 }
 function lsFinish(st, full){
   if(st.finished) return; st.finished = true;
-  const e = {date: dayStr(), read: st.read, techniques: st.done, states: st.states, next: st.next || (st.states[st.states.length-1]||'ST01'), words: st.words, act: st.act, when: st.when, full: !!full, left: !!st.left};
+  const e = {date: dayStr(), personal: st.personal||0, read: st.read, techniques: st.done, states: st.states, next: st.next || (st.states[st.states.length-1]||'ST01'), words: st.words, act: st.act, when: st.when, full: !!full, left: !!st.left};
   if(st.read) { lsLog.push(e); lsSave(); }
   const names = st.done.map(id => (lsTech(id)||{}).name).filter(Boolean);
   if(st.read) transcript.push({role:'guide', text:`[We just did a live session together. They came in: ${st.read}. Techniques: ${names.join(', ') || 'none'}. ${st.words ? 'In their words afterwards: "'+st.words+'".' : ''} ${st.act ? 'Their act: '+st.act+', '+st.when+'.' : ''} ${st.left ? 'They left early.' : ''}]`});
@@ -3557,7 +3583,7 @@ $('langSel').addEventListener('change',e=>{ setLang(e.target.value, true); });
 // ---------- the owner's feedback on the guide's replies: shown only to the artifact's owner, never on the public site.
 // Two loops: the latest notes go straight into the next prompts, so the guide adapts at once (this device, the last 20);
 // and each note is written to the artifact's db, collection "feedback", as the record the constitution is revised from.
-const PAGE_VERSION = 'fc8f079694';
+const PAGE_VERSION = '7914065851';
 const FB_TAGS = ['too_long','too_short','preachy','didnt_hear','robotic','wrong_teaching','not_natural','loved'];
 const FB_TAG_EN = {too_long:'too long', too_short:'too short', preachy:'preachy', didnt_hear:"didn't hear me", robotic:'robotic, stiff', wrong_teaching:'wrong teaching', not_natural:'not natural', loved:'loved this'};
 const FB_MAX = 20, FB_CAP = 2048, FB_FATAL = /^(invalid_argument|quota_exceeded|resource_exhausted|revoked|not_granted|capability_disabled|capability_removed|transform_error)$/;
