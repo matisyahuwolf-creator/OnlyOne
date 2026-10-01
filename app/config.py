@@ -30,7 +30,7 @@ NEO4J_DATABASE = _opt("NEO4J_DATABASE", "neo4j")
 # Anthropic
 ANTHROPIC_API_KEY = _opt("ANTHROPIC_API_KEY")
 CLAUDE_MODEL = _opt("CLAUDE_MODEL", "claude-opus-5-5")
-CLAUDE_EFFORT = _opt("CLAUDE_EFFORT", "medium")
+CLAUDE_EFFORT = _opt("CLAUDE_EFFORT", "high")
 
 # WhatsApp
 WA_PHONE_NUMBER_ID = _opt("WHATSAPP_PHONE_NUMBER_ID")
