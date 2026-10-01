@@ -31,7 +31,7 @@ from pathlib import Path
 
 import anthropic
 from fastapi import APIRouter, Header, HTTPException, Request
-from fastapi.responses import HTMLResponse, JSONResponse, Response, StreamingResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response, StreamingResponse
 
 from . import config
 
@@ -292,7 +292,22 @@ def _network(request: Request) -> str:
     return request.client.host if request.client else "unknown"
 
 
-def _admit(visitor: str, network: str, tier: str) -> int:
+def _is_owner(request: Request) -> bool:
+    """The owner's browser carries a cookie set by /guide/owner?code=...; it is never limited per visitor."""
+    c = request.cookies.get("oo_owner", "")
+    return bool(OWNER_CODE) and bool(c) and hmac.compare_digest(c, OWNER_CODE)
+
+
+@router.get("/guide/owner")
+def guide_owner(code: str = "") -> Response:
+    """Opens the guide for the owner with no per-visitor limits (the site's daily cost ceiling still holds)."""
+    _owner(code)
+    r = RedirectResponse("/guide", status_code=303)
+    r.set_cookie("oo_owner", code, max_age=86400 * 365, httponly=True, secure=True, samesite="lax")
+    return r
+
+
+def _admit(visitor: str, network: str, tier: str, owner: bool = False) -> int:
     """Checks the ceilings and reserves this call. Returns the row id; raises 429 with a reason."""
     now = time.time()
     k = {"default": 1, "round": MAX_ROUNDS}.get(tier, 3)   # the small calls get three times the room; tool rounds, one reply's worth
@@ -303,7 +318,7 @@ def _admit(visitor: str, network: str, tier: str) -> int:
             return c.execute(f"SELECT count(*) FROM guide_usage WHERE tier=? AND ts>? {where}",
                              (tier, since) + args).fetchone()[0]
 
-        if PUBLIC:
+        if PUBLIC and not owner:
             if visitor and PER_HOUR and count("AND visitor=?", (visitor,), now - 3600) >= PER_HOUR * k:
                 raise HTTPException(429, detail={"reason": "hour"})
             if visitor and PER_DAY and count("AND visitor=?", (visitor,), now - 86400) >= PER_DAY * k:
@@ -426,7 +441,7 @@ async def guide_sample(request: Request, x_chat_code: str = Header(default="")):
     if body.get("tools"):
         return _tool_round(request, body, msgs)
     tier = "quick" if body.get("tier") == "quick" else "default"
-    row = _admit(request.cookies.get("oo_v", ""), _network(request), tier)
+    row = _admit(request.cookies.get("oo_v", ""), _network(request), tier, _is_owner(request))
     model = QUICK_MODEL if tier == "quick" else config.CLAUDE_MODEL
     kw = dict(model=model, max_tokens=8000, messages=msgs)
     if body.get("json"):
@@ -466,7 +481,7 @@ def _tool_round(request: Request, body: dict, msgs: list[dict]):
     n = int(body.get("round") or 0)
     if not 0 <= n < MAX_ROUNDS:
         raise HTTPException(400, "too many rounds")
-    row = _admit(request.cookies.get("oo_v", ""), _network(request), "default" if n == 0 else "round")
+    row = _admit(request.cookies.get("oo_v", ""), _network(request), "default" if n == 0 else "round", _is_owner(request))
     kw = dict(model=config.CLAUDE_MODEL, max_tokens=16000, messages=msgs, tools=KG_TOOLS,
               output_config={"effort": config.CLAUDE_EFFORT or "medium"},
               cache_control={"type": "ephemeral"},            # the growing conversation is read again every round
@@ -647,7 +662,7 @@ async def guide_tts(request: Request, x_chat_code: str = Header(default="")):
     h = hashlib.sha256(f"{ELEVEN_VOICE}|{ELEVEN_MODEL}|{text}".encode()).hexdigest()[:32]
     f = TTS_CACHE / f"{h}.mp3"
     if not f.exists():
-        _admit(request.cookies.get("oo_v", ""), _network(request), "quick")
+        _admit(request.cookies.get("oo_v", ""), _network(request), "quick", _is_owner(request))
         req = urllib.request.Request(
             f"https://api.elevenlabs.io/v1/text-to-speech/{ELEVEN_VOICE}?output_format=mp3_44100_128",
             data=json.dumps({"text": text, "model_id": ELEVEN_MODEL, "previous_text": str(body.get("prev", ""))[-500:],

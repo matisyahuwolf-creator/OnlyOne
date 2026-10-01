@@ -18,9 +18,9 @@ services:
         value: "1"
       # demo limits, counted in replies: each visitor, and the whole site. Raise them when it's more than a demo.
       - key: GUIDE_REPLIES_PER_HOUR
-        value: "6"
+        value: "20"
       - key: GUIDE_REPLIES_PER_DAY
-        value: "10"
+        value: "40"
       - key: GUIDE_SITE_REPLIES_PER_DAY
         value: "200"
       - key: GUIDE_FEEDBACK_EMAIL  # where "Send this chat" emails a conversation the person chooses to send you
