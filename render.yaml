@@ -4,7 +4,7 @@ services:
     name: only-one
     runtime: python
     plan: free               # a free demo: it sleeps when idle, and the first visitor waits about a minute (starter = always on, about $7 a month)
-    buildCommand: pip install -r requirements.txt
+    buildCommand: pip install -r requirements.txt && python -m app.shelf
     startCommand: uvicorn app.guide_server:app --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips '*'
     healthCheckPath: /health
     envVars:
