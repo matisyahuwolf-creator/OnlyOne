@@ -354,23 +354,6 @@ def _gate(code: str) -> None:
 
 # ---------- routes
 
-_SRC_CACHE: dict[str, bytes] = {}
-
-@router.get("/guide/src/{name}")
-def guide_source(name: str, request: Request) -> Response:
-    """The direct sources (D89): the book passages behind the source numbers, src/p0.json .. pN.json next to the page."""
-    import re as _re
-    if not _re.fullmatch(r"p\d{1,3}\.json", name):
-        raise HTTPException(404, "not found")
-    f = PAGE.parent / "src" / name
-    if not f.is_file():
-        raise HTTPException(404, "not found")
-    gz = _SRC_CACHE.get(name) or _SRC_CACHE.setdefault(name, gzip.compress(f.read_bytes(), 6))
-    hdr = {"Cache-Control": "public, max-age=86400", "Vary": "Accept-Encoding"}
-    if "gzip" in request.headers.get("accept-encoding", ""):
-        return Response(gz, media_type="application/json; charset=utf-8", headers=hdr | {"Content-Encoding": "gzip"})
-    return Response(f.read_bytes(), media_type="application/json; charset=utf-8", headers=hdr)
-
 @router.get("/guide", response_class=HTMLResponse)
 def guide_page(request: Request) -> HTMLResponse:
     html, _ = _page()

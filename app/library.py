@@ -19,13 +19,8 @@ import unicodedata
 from fastapi import APIRouter, HTTPException
 
 router = APIRouter()
-from . import shelf as _shelf
-
 URI = os.getenv("NEO4J_URI", "").strip()
-NEO = bool(URI and os.getenv("NEO4J_PASSWORD", "").strip())
-SHELF = (not NEO) and _shelf.AVAILABLE    # D91: without Neo4j, the deep shelf (SQLite full text) answers the same routes
-ON = NEO or SHELF
-if SHELF: _shelf.warm()
+ON = bool(URI and os.getenv("NEO4J_PASSWORD", "").strip())
 _drv = None
 
 
@@ -100,10 +95,6 @@ def lib_search(q: str = "", work: str = "", author: str = "", n: int = 8):
     if not words:
         raise HTTPException(400, "q is required")
     n = max(1, min(n, 12))
-    if SHELF:
-        if not _shelf.ready():
-            return {"query": words, "results": [], "note": "The library is still opening (about a minute after the site wakes). Answer from what you have, and try again next turn."}
-        return {"query": words, "results": _shelf.search(words, work.strip()[:100], author.strip()[:100], n)}
     rows = []
     for all_words in (True, False):
         lq = lucene(words, all_words)
@@ -129,10 +120,6 @@ def lib_search(q: str = "", work: str = "", author: str = "", n: int = 8):
 @router.get("/guide/lib/read")
 def lib_read(id: str, around: int = 1):
     around = max(0, min(around, 4))
-    if SHELF:
-        r = _shelf.read(id, around)
-        if not r: raise HTTPException(404, "no passage with that id")
-        return r
     me = cy("""MATCH (s:Segment {id: $id})-[:IN_WORK]->(w:Work)<-[:WROTE]-(a:Author)
         OPTIONAL MATCH (s)-[:PRIMARY|TAGGED]->(c:Concept)
         RETURN s.work AS wk, s.seq AS seq, s.ref AS ref, coalesce(s.text, s.plain) AS text, s.en AS en,
@@ -153,8 +140,6 @@ def lib_read(id: str, around: int = 1):
 @router.get("/guide/lib/related")
 def lib_related(id: str, n: int = 6):
     n = max(1, min(n, 10))
-    if SHELF:
-        return {"id": id, "concepts": [], "related": [], "note": "Related passages need the concept graph; search the library with the passage's key words instead."}
     rows = cy("""MATCH (s:Segment {id: $id})-[:PRIMARY|TAGGED]->(c:Concept)
         WITH s, collect(c) AS cs
         UNWIND cs AS c
@@ -179,7 +164,5 @@ def lib_related(id: str, n: int = 6):
 def lib_health():
     if not ON:
         return {"connected": False}
-    if SHELF:
-        return {"connected": True, "engine": "shelf", "ready": _shelf.ready(), "works": _shelf.works()}
     n = cy("MATCH (s:Segment) RETURN count(s) AS n")[0]["n"]
     return {"connected": True, "passages": n}

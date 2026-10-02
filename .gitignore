@@ -3,5 +3,3 @@
 __pycache__/
 *.pyc
 guide_usage.db
-shelf.db
-shelf.tmp
